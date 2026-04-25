@@ -65,8 +65,6 @@ def chat(
     if provider != PROVIDER_OLLAMA:
         kwargs["frequency_penalty"] = frequency_penalty
         kwargs["presence_penalty"] = presence_penalty
-    else:
-        kwargs["extra_body"] = {"options": {"think": False}}
     if response_format:
         kwargs["response_format"] = response_format
 
@@ -134,21 +132,33 @@ def chat_stream(
     if provider != PROVIDER_OLLAMA:
         kwargs["frequency_penalty"] = frequency_penalty
         kwargs["presence_penalty"] = presence_penalty
-    else:
-        # Disable Qwen3 thinking mode via Ollama's options API
-        kwargs["extra_body"] = {"options": {"think": False}}
 
     logger.info("[stream] %s model=%s", provider, model)
 
     try:
         stream = client.chat.completions.create(**kwargs)
+        in_reasoning = False
         chunk_count = 0
         for chunk in stream:
             delta = chunk.choices[0].delta if chunk.choices else None
-            if delta and delta.content:
+            if not delta:
+                continue
+            # Ollama sends Qwen3 reasoning in delta.reasoning — wrap in tags so strip_think_tags filters it
+            reasoning = getattr(delta, "reasoning", None)
+            if reasoning:
+                if not in_reasoning:
+                    yield "<think>"
+                    in_reasoning = True
+                yield reasoning
+            if delta.content:
+                if in_reasoning:
+                    yield "</think>"
+                    in_reasoning = False
                 chunk_count += 1
                 yield delta.content
-        logger.debug("[stream] received %d chunks", chunk_count)
+        if in_reasoning:
+            yield "</think>"
+        logger.info("[stream] done, %d content chunks", chunk_count)
     except Exception as e:
         logger.error("[stream] FAILED %s: %s", provider, e)
         yield "[LLM Error: " + str(e) + "]"

@@ -12,7 +12,7 @@ logging.basicConfig(
 
 from config import (
     APP_TITLE, APP_PORT, AVAILABLE_MODELS,
-    DEFAULT_TEMPERATURE, DEFAULT_TOP_P, DEFAULT_MAX_TOKENS,
+    DEFAULT_TEMPERATURE, DEFAULT_TOP_P, DEFAULT_MAX_TOKENS, OLLAMA_MAX_TOKENS,
     DEFAULT_FREQUENCY_PENALTY, DEFAULT_PRESENCE_PENALTY,
     PROVIDER_OPENROUTER, PROVIDER_OLLAMA, MODELS,
 )
@@ -73,6 +73,7 @@ def respond(message, history, cv_text, jd_text, model, provider,
 
     full_response = ""
     is_ollama = (provider == PROVIDER_OLLAMA)
+    effective_max_tokens = OLLAMA_MAX_TOKENS if is_ollama else max_tokens
     try:
         for chunk in chat_stream(
             messages=messages,
@@ -80,7 +81,7 @@ def respond(message, history, cv_text, jd_text, model, provider,
             provider=provider,
             temperature=temperature,
             top_p=top_p,
-            max_tokens=max_tokens,
+            max_tokens=effective_max_tokens,
             frequency_penalty=freq_pen,
             presence_penalty=pres_pen,
         ):
