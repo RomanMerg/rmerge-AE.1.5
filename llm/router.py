@@ -65,6 +65,8 @@ def chat(
     if provider != PROVIDER_OLLAMA:
         kwargs["frequency_penalty"] = frequency_penalty
         kwargs["presence_penalty"] = presence_penalty
+    else:
+        kwargs["extra_body"] = {"options": {"think": False}}
     if response_format:
         kwargs["response_format"] = response_format
 
@@ -132,20 +134,21 @@ def chat_stream(
     if provider != PROVIDER_OLLAMA:
         kwargs["frequency_penalty"] = frequency_penalty
         kwargs["presence_penalty"] = presence_penalty
+    else:
+        # Disable Qwen3 thinking mode via Ollama's options API
+        kwargs["extra_body"] = {"options": {"think": False}}
 
     logger.info("[stream] %s model=%s", provider, model)
 
     try:
         stream = client.chat.completions.create(**kwargs)
+        chunk_count = 0
         for chunk in stream:
             delta = chunk.choices[0].delta if chunk.choices else None
-            if delta:
-                # Handle reasoning content from thinking models
-                if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
-                    yield delta.reasoning_content
-                # Handle regular content
-                if delta.content:
-                    yield delta.content
+            if delta and delta.content:
+                chunk_count += 1
+                yield delta.content
+        logger.debug("[stream] received %d chunks", chunk_count)
     except Exception as e:
         logger.error("[stream] FAILED %s: %s", provider, e)
         yield "[LLM Error: " + str(e) + "]"

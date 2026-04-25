@@ -60,10 +60,6 @@ def respond(message, history, cv_text, jd_text, model, provider,
         "and ask the next question. Stay in character."
     )
 
-    # Disable thinking mode for Ollama thinking models (Qwen 3.5)
-    if provider == PROVIDER_OLLAMA:
-        system_parts.append("\n/no_think")
-
     messages = [{"role": "system", "content": "\n".join(system_parts)}]
     for msg in history:
         messages.append({"role": msg["role"], "content": msg["content"]})
