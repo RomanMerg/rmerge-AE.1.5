@@ -187,16 +187,6 @@ def apply_recommended(model_name):
 
 def create_app():
     with gr.Blocks(title=APP_TITLE) as app:
-        # One-time JS helper — lets template buttons push text into ChatInterface's input field.
-        gr.HTML("""<script>
-function fillChat(text) {
-    var ta = document.querySelector('.message-input textarea');
-    if (ta) {
-        ta.value = text;
-        ta.dispatchEvent(new Event('input', {bubbles: true}));
-    }
-}
-</script>""")
         gr.Markdown("# " + APP_TITLE)
         gr.Markdown(
             "Practice for your next interview with AI-powered feedback. "
@@ -262,7 +252,7 @@ function fillChat(text) {
                         step=0.05, label="Top-p",
                     )
                     max_tokens = gr.Slider(
-                        64, 4096, DEFAULT_MAX_TOKENS,
+                        64, 32768, DEFAULT_MAX_TOKENS,
                         step=64, label="Max Tokens",
                     )
                     freq_pen = gr.Slider(
@@ -297,8 +287,14 @@ function fillChat(text) {
 
             with gr.Column(scale=2):
                 gr.Markdown("### Interview Practice Chat")
+                chat_input = gr.Textbox(
+                    placeholder="Type a message...",
+                    show_label=False,
+                    scale=7,
+                )
                 gr.ChatInterface(
                     fn=respond,
+                    textbox=chat_input,
                     additional_inputs=[
                         cv_text, jd_text, model, provider,
                         temperature, top_p, max_tokens,
@@ -307,9 +303,6 @@ function fillChat(text) {
                     fill_height=True,
                 )
                 with gr.Accordion("Input Templates", open=False):
-                    # Hidden textbox — receives template text from button click,
-                    # then its .change() fires the JS to fill the chat input.
-                    template_target = gr.Textbox(visible=False)
                     for t in INPUT_TEMPLATES:
                         with gr.Row():
                             gr.Textbox(
@@ -319,16 +312,11 @@ function fillChat(text) {
                                 lines=2,
                             )
                             use_btn = gr.Button("↑ Use", size="sm", min_width=60)
+                            # Output directly to chat_input — no JS needed
                             use_btn.click(
                                 fn=lambda txt=t["text"]: txt,
-                                outputs=[template_target],
+                                outputs=[chat_input],
                             )
-                    # When template_target gets a new value, inject it into the chat input via JS
-                    template_target.change(
-                        fn=None,
-                        inputs=[template_target],
-                        js="(text) => { fillChat(text); }",
-                    )
 
     return app
 
