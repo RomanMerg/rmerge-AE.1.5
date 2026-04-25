@@ -18,6 +18,7 @@ from config import (
 )
 from llm.router import chat, chat_stream, smoke_test
 from llm.guards import validate_cv, validate_jd, check_prompt_injection
+from llm.user_prompts import INPUT_TEMPLATES
 from db.connection import init_db, test_connection
 from utils.cost_tracker import SessionCostTracker
 
@@ -186,6 +187,16 @@ def apply_recommended(model_name):
 
 def create_app():
     with gr.Blocks(title=APP_TITLE) as app:
+        # One-time JS helper — lets template buttons push text into ChatInterface's input field.
+        gr.HTML("""<script>
+function fillChat(text) {
+    var ta = document.querySelector('.message-input textarea');
+    if (ta) {
+        ta.value = text;
+        ta.dispatchEvent(new Event('input', {bubbles: true}));
+    }
+}
+</script>""")
         gr.Markdown("# " + APP_TITLE)
         gr.Markdown(
             "Practice for your next interview with AI-powered feedback. "
@@ -277,6 +288,30 @@ def create_app():
                         apply_recommended,
                         inputs=[model],
                         outputs=[temperature, top_p, max_tokens, freq_pen, pres_pen],
+                    )
+
+                with gr.Accordion("Input Templates", open=False):
+                    # Hidden textbox — receives template text from button click,
+                    # then its .change() fires the JS to fill the chat input.
+                    template_target = gr.Textbox(visible=False)
+                    for t in INPUT_TEMPLATES:
+                        with gr.Row():
+                            gr.Textbox(
+                                value=t["text"],
+                                label=t["label"],
+                                interactive=False,
+                                lines=2,
+                            )
+                            use_btn = gr.Button("↑ Use", size="sm", min_width=60)
+                            use_btn.click(
+                                fn=lambda txt=t["text"]: txt,
+                                outputs=[template_target],
+                            )
+                    # When template_target gets a new value, inject it into the chat input via JS
+                    template_target.change(
+                        fn=None,
+                        inputs=[template_target],
+                        js="(text) => { fillChat(text); }",
                     )
 
                 with gr.Accordion("System Status", open=False):
