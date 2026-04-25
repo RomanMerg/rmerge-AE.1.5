@@ -1,0 +1,8 @@
+gradio>=4.0
+openai>=1.0
+instructor>=1.0
+pymupdf4llm>=0.0.10
+psycopg2-binary>=2.9
+pgvector>=0.3
+pydantic>=2.0
+python-dotenv>=1.0
