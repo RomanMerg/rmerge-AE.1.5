@@ -135,6 +135,18 @@ def check_status():
     return "\n\n".join(parts)
 
 
+def _model_choices_for_provider(provider):
+    """Return (choices, value, interactive) for the model dropdown."""
+    if provider == PROVIDER_OLLAMA:
+        return ["qwen3.5:9b"], "qwen3.5:9b", False
+    return AVAILABLE_MODELS, AVAILABLE_MODELS[0], True
+
+
+def update_model_choices(provider):
+    choices, value, interactive = _model_choices_for_provider(provider)
+    return gr.Dropdown(choices=choices, value=value, interactive=interactive)
+
+
 def create_app():
     with gr.Blocks(title=APP_TITLE) as app:
         gr.Markdown("# " + APP_TITLE)
@@ -172,16 +184,17 @@ def create_app():
                     )
 
                 with gr.Accordion("Settings", open=False):
-                    model = gr.Dropdown(
-                        choices=AVAILABLE_MODELS,
-                        value=AVAILABLE_MODELS[0],
-                        label="Model (OpenRouter)",
-                    )
                     provider = gr.Radio(
                         choices=[PROVIDER_OPENROUTER, PROVIDER_OLLAMA],
                         value=PROVIDER_OPENROUTER,
                         label="Provider",
                     )
+                    model = gr.Dropdown(
+                        choices=AVAILABLE_MODELS,
+                        value=AVAILABLE_MODELS[0],
+                        label="Model",
+                    )
+                    provider.change(update_model_choices, inputs=[provider], outputs=[model])
                     persona = gr.Radio(
                         choices=["neutral", "strict", "friendly"],
                         value="neutral",

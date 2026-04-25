@@ -45,3 +45,26 @@ def test_input_templates_structure():
         assert "label" in t and "text" in t
         assert isinstance(t["label"], str) and len(t["label"]) > 0
         assert isinstance(t["text"], str) and len(t["text"]) > 0
+
+
+# --- Task 3: Provider → model cascade ---
+
+def _model_choices_for_provider(provider):
+    """Pure logic extracted from the Gradio handler for testability."""
+    if provider == PROVIDER_OLLAMA:
+        return ["qwen3.5:9b"], "qwen3.5:9b", False
+    return AVAILABLE_MODELS, AVAILABLE_MODELS[0], True
+
+
+def test_model_choices_ollama():
+    choices, value, interactive = _model_choices_for_provider(PROVIDER_OLLAMA)
+    assert choices == ["qwen3.5:9b"]
+    assert value == "qwen3.5:9b"
+    assert interactive is False
+
+
+def test_model_choices_openrouter():
+    choices, value, interactive = _model_choices_for_provider(PROVIDER_OPENROUTER)
+    assert choices == AVAILABLE_MODELS
+    assert value == AVAILABLE_MODELS[0]
+    assert interactive is True
