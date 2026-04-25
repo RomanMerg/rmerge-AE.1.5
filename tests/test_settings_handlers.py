@@ -32,3 +32,16 @@ def test_qwen_presence_penalty_is_nonzero():
 
 def test_qwen_max_tokens():
     assert MODEL_CONFIGS["qwen3.5:9b"]["recommended"]["max_tokens"] == 32768
+
+
+# --- Task 2: Input Templates ---
+
+from llm.user_prompts import INPUT_TEMPLATES
+
+
+def test_input_templates_structure():
+    assert len(INPUT_TEMPLATES) >= 1
+    for t in INPUT_TEMPLATES:
+        assert "label" in t and "text" in t
+        assert isinstance(t["label"], str) and len(t["label"]) > 0
+        assert isinstance(t["text"], str) and len(t["text"]) > 0
