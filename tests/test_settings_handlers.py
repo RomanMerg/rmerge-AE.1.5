@@ -68,3 +68,61 @@ def test_model_choices_openrouter():
     assert choices == AVAILABLE_MODELS
     assert value == AVAILABLE_MODELS[0]
     assert interactive is True
+
+
+# --- Task 4: Reactive sliders and recommended defaults ---
+
+from config import DEFAULT_TEMPERATURE, DEFAULT_TOP_P, DEFAULT_MAX_TOKENS
+from config import DEFAULT_FREQUENCY_PENALTY, DEFAULT_PRESENCE_PENALTY
+
+
+def _slider_states_for_model(model_name):
+    """Return (temp_on, top_p_on, freq_on, pres_on, tooltip) for a model."""
+    cfg = MODEL_CONFIGS.get(model_name, {})
+    return (
+        cfg.get("supports_temperature", True),
+        cfg.get("supports_top_p", True),
+        cfg.get("supports_freq_penalty", True),
+        cfg.get("supports_pres_penalty", True),
+        cfg.get("tooltip", ""),
+    )
+
+
+def _recommended_values_for_model(model_name):
+    """Return (temperature, top_p, max_tokens, freq_pen, pres_pen) recommended values."""
+    rec = MODEL_CONFIGS.get(model_name, {}).get("recommended", {})
+    return (
+        rec.get("temperature", DEFAULT_TEMPERATURE),
+        rec.get("top_p", DEFAULT_TOP_P),
+        rec.get("max_tokens", DEFAULT_MAX_TOKENS),
+        rec.get("freq_pen", DEFAULT_FREQUENCY_PENALTY),
+        rec.get("pres_pen", DEFAULT_PRESENCE_PENALTY),
+    )
+
+
+def test_slider_states_gpt5_mini_no_temp():
+    temp_on, top_p_on, freq_on, pres_on, tooltip = _slider_states_for_model("openai/gpt-5-mini")
+    assert temp_on is False
+    assert top_p_on is True
+    assert "Temperature" in tooltip
+
+
+def test_slider_states_qwen_no_freq():
+    temp_on, top_p_on, freq_on, pres_on, tooltip = _slider_states_for_model("qwen3.5:9b")
+    assert temp_on is True
+    assert freq_on is False
+    assert "presence_penalty" in tooltip
+
+
+def test_recommended_values_qwen():
+    temp, top_p, max_tok, freq, pres = _recommended_values_for_model("qwen3.5:9b")
+    assert temp == 0.7
+    assert top_p == 0.8
+    assert max_tok == 32768
+    assert pres == 1.5
+
+
+def test_recommended_values_unknown_model_uses_defaults():
+    temp, top_p, max_tok, freq, pres = _recommended_values_for_model("some/unknown-model")
+    assert temp == DEFAULT_TEMPERATURE
+    assert top_p == DEFAULT_TOP_P

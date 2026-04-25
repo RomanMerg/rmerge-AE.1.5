@@ -12,9 +12,9 @@ logging.basicConfig(
 
 from config import (
     APP_TITLE, APP_PORT, AVAILABLE_MODELS,
-    DEFAULT_TEMPERATURE, DEFAULT_TOP_P, DEFAULT_MAX_TOKENS, OLLAMA_MAX_TOKENS,
+    DEFAULT_TEMPERATURE, DEFAULT_TOP_P, DEFAULT_MAX_TOKENS,
     DEFAULT_FREQUENCY_PENALTY, DEFAULT_PRESENCE_PENALTY,
-    PROVIDER_OPENROUTER, PROVIDER_OLLAMA, MODELS,
+    PROVIDER_OPENROUTER, PROVIDER_OLLAMA, MODELS, MODEL_CONFIGS,
 )
 from llm.router import chat, chat_stream, smoke_test
 from llm.guards import validate_cv, validate_jd, check_prompt_injection
@@ -73,7 +73,7 @@ def respond(message, history, cv_text, jd_text, model, provider,
 
     full_response = ""
     is_ollama = (provider == PROVIDER_OLLAMA)
-    effective_max_tokens = OLLAMA_MAX_TOKENS if is_ollama else max_tokens
+    effective_max_tokens = MODEL_CONFIGS["qwen3.5:9b"]["recommended"]["max_tokens"] if is_ollama else max_tokens
     try:
         for chunk in chat_stream(
             messages=messages,
@@ -145,6 +145,43 @@ def _model_choices_for_provider(provider):
 def update_model_choices(provider):
     choices, value, interactive = _model_choices_for_provider(provider)
     return gr.Dropdown(choices=choices, value=value, interactive=interactive)
+
+
+def _slider_states_for_model(model_name):
+    cfg = MODEL_CONFIGS.get(model_name, {})
+    return (
+        cfg.get("supports_temperature", True),
+        cfg.get("supports_top_p", True),
+        cfg.get("supports_freq_penalty", True),
+        cfg.get("supports_pres_penalty", True),
+        cfg.get("tooltip", ""),
+    )
+
+
+def update_slider_states(model_name):
+    temp_on, top_p_on, freq_on, pres_on, tooltip = _slider_states_for_model(model_name)
+    return (
+        gr.Slider(interactive=temp_on),
+        gr.Slider(interactive=top_p_on),
+        gr.Slider(interactive=freq_on),
+        gr.Slider(interactive=pres_on),
+        tooltip,
+    )
+
+
+def _recommended_values_for_model(model_name):
+    rec = MODEL_CONFIGS.get(model_name, {}).get("recommended", {})
+    return (
+        rec.get("temperature", DEFAULT_TEMPERATURE),
+        rec.get("top_p", DEFAULT_TOP_P),
+        rec.get("max_tokens", DEFAULT_MAX_TOKENS),
+        rec.get("freq_pen", DEFAULT_FREQUENCY_PENALTY),
+        rec.get("pres_pen", DEFAULT_PRESENCE_PENALTY),
+    )
+
+
+def apply_recommended(model_name):
+    return _recommended_values_for_model(model_name)
 
 
 def create_app():
@@ -224,6 +261,22 @@ def create_app():
                     pres_pen = gr.Slider(
                         -2.0, 2.0, DEFAULT_PRESENCE_PENALTY,
                         step=0.1, label="Presence Penalty",
+                    )
+                    # Tooltip shown when a slider is disabled for the selected model
+                    slider_tooltip = gr.Markdown("", visible=True)
+                    recommended_btn = gr.Button("Apply recommended settings", size="sm")
+
+                    # Wire model change → update slider interactive states + tooltip
+                    model.change(
+                        update_slider_states,
+                        inputs=[model],
+                        outputs=[temperature, top_p, freq_pen, pres_pen, slider_tooltip],
+                    )
+                    # Wire button → snap all sliders to model's recommended values
+                    recommended_btn.click(
+                        apply_recommended,
+                        inputs=[model],
+                        outputs=[temperature, top_p, max_tokens, freq_pen, pres_pen],
                     )
 
                 with gr.Accordion("System Status", open=False):

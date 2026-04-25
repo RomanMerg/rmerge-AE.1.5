@@ -100,8 +100,6 @@ DEFAULT_MAX_TOKENS = 1024
 DEFAULT_FREQUENCY_PENALTY = 0.0
 DEFAULT_PRESENCE_PENALTY = 0.0
 
-# --- Ollama/Qwen3.5 Settings ---
-OLLAMA_MAX_TOKENS = 32768  # kept temporarily — removed in Task 4 once respond() reads MODEL_CONFIGS
 
 # --- Providers ---
 PROVIDER_OPENROUTER = "openrouter"
