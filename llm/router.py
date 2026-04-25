@@ -1,5 +1,4 @@
 """LLM Router - OpenRouter and Ollama via openai SDK."""
-"""Ollama/Qwen3.5:9b(thinking)"""
 
 import logging
 from openai import OpenAI
@@ -8,6 +7,8 @@ from config import (
     MODELS, PROVIDER_OPENROUTER, PROVIDER_OLLAMA,
     DEFAULT_TEMPERATURE, DEFAULT_TOP_P, DEFAULT_MAX_TOKENS,
     DEFAULT_FREQUENCY_PENALTY, DEFAULT_PRESENCE_PENALTY,
+    OLLAMA_MAX_TOKENS, OLLAMA_TEMPERATURE, OLLAMA_TOP_P,
+    OLLAMA_PRESENCE_PENALTY, OLLAMA_TOP_K,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,16 +56,29 @@ def chat(
         model = MODELS["chat"]
 
     client = get_client(provider)
-    kwargs = {
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-        "top_p": top_p,
-        "max_tokens": max_tokens,
-    }
-    if provider != PROVIDER_OLLAMA:
-        kwargs["frequency_penalty"] = frequency_penalty
-        kwargs["presence_penalty"] = presence_penalty
+    if provider == PROVIDER_OLLAMA:
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "temperature": OLLAMA_TEMPERATURE,
+            "top_p": OLLAMA_TOP_P,
+            "max_tokens": OLLAMA_MAX_TOKENS,
+            "presence_penalty": OLLAMA_PRESENCE_PENALTY,
+            "extra_body": {
+                "top_k": OLLAMA_TOP_K,
+                "chat_template_kwargs": {"enable_thinking": False},
+            },
+        }
+    else:
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "top_p": top_p,
+            "max_tokens": max_tokens,
+            "frequency_penalty": frequency_penalty,
+            "presence_penalty": presence_penalty,
+        }
     if response_format:
         kwargs["response_format"] = response_format
 
@@ -121,17 +135,31 @@ def chat_stream(
         model = MODELS["chat"]
 
     client = get_client(provider)
-    kwargs = {
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-        "top_p": top_p,
-        "max_tokens": max_tokens,
-        "stream": True,
-    }
-    if provider != PROVIDER_OLLAMA:
-        kwargs["frequency_penalty"] = frequency_penalty
-        kwargs["presence_penalty"] = presence_penalty
+    if provider == PROVIDER_OLLAMA:
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "temperature": OLLAMA_TEMPERATURE,
+            "top_p": OLLAMA_TOP_P,
+            "max_tokens": OLLAMA_MAX_TOKENS,
+            "presence_penalty": OLLAMA_PRESENCE_PENALTY,
+            "stream": True,
+            "extra_body": {
+                "top_k": OLLAMA_TOP_K,
+                "chat_template_kwargs": {"enable_thinking": False},
+            },
+        }
+    else:
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "top_p": top_p,
+            "max_tokens": max_tokens,
+            "frequency_penalty": frequency_penalty,
+            "presence_penalty": presence_penalty,
+            "stream": True,
+        }
 
     logger.info("[stream] %s model=%s", provider, model)
 

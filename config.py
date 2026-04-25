@@ -29,13 +29,19 @@ AVAILABLE_MODELS = [
     "openai/gpt-5",
 ]
 
-# --- LLM Default Settings ---
+# --- LLM Default Settings (OpenRouter) ---
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_TOP_P = 0.9
 DEFAULT_MAX_TOKENS = 1024
-OLLAMA_MAX_TOKENS = 4096  # Qwen3 reasoning uses ~400-800 tokens before answering
 DEFAULT_FREQUENCY_PENALTY = 0.0
 DEFAULT_PRESENCE_PENALTY = 0.0
+
+# --- Ollama/Qwen3.5 Settings (per official Qwen docs, instruct/non-thinking mode) ---
+OLLAMA_MAX_TOKENS = 32768
+OLLAMA_TEMPERATURE = 0.7
+OLLAMA_TOP_P = 0.8
+OLLAMA_PRESENCE_PENALTY = 1.5
+OLLAMA_TOP_K = 20
 
 # --- Providers ---
 PROVIDER_OPENROUTER = "openrouter"
