@@ -290,6 +290,22 @@ function fillChat(text) {
                         outputs=[temperature, top_p, max_tokens, freq_pen, pres_pen],
                     )
 
+                with gr.Accordion("System Status", open=False):
+                    status_btn = gr.Button("Check Connections")
+                    status_out = gr.Textbox(label="Status", lines=8)
+                    status_btn.click(check_status, outputs=[status_out])
+
+            with gr.Column(scale=2):
+                gr.Markdown("### Interview Practice Chat")
+                gr.ChatInterface(
+                    fn=respond,
+                    additional_inputs=[
+                        cv_text, jd_text, model, provider,
+                        temperature, top_p, max_tokens,
+                        freq_pen, pres_pen, persona, difficulty,
+                    ],
+                    fill_height=True,
+                )
                 with gr.Accordion("Input Templates", open=False):
                     # Hidden textbox — receives template text from button click,
                     # then its .change() fires the JS to fill the chat input.
@@ -313,23 +329,6 @@ function fillChat(text) {
                         inputs=[template_target],
                         js="(text) => { fillChat(text); }",
                     )
-
-                with gr.Accordion("System Status", open=False):
-                    status_btn = gr.Button("Check Connections")
-                    status_out = gr.Textbox(label="Status", lines=8)
-                    status_btn.click(check_status, outputs=[status_out])
-
-            with gr.Column(scale=2):
-                gr.Markdown("### Interview Practice Chat")
-                gr.ChatInterface(
-                    fn=respond,
-                    additional_inputs=[
-                        cv_text, jd_text, model, provider,
-                        temperature, top_p, max_tokens,
-                        freq_pen, pres_pen, persona, difficulty,
-                    ],
-                    fill_height=True,
-                )
 
     return app
 
