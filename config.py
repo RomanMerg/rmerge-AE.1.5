@@ -29,6 +29,70 @@ AVAILABLE_MODELS = [
     "openai/gpt-5",
 ]
 
+# Per-model capability flags and recommended slider values.
+# supports_* = False means that slider should be greyed out in the UI.
+MODEL_CONFIGS = {
+    "openai/gpt-5-mini": {
+        "supports_temperature": False,
+        "supports_top_p": True,
+        "supports_freq_penalty": True,
+        "supports_pres_penalty": True,
+        "recommended": {
+            "temperature": 1.0,   # not sent to API when unsupported
+            "top_p": 1.0,
+            "max_tokens": 1024,
+            "freq_pen": 0.0,
+            "pres_pen": 0.0,
+        },
+        "tooltip": "gpt-5-mini uses fixed sampling — Temperature has no effect for this model.",
+    },
+    "openai/gpt-5-nano": {
+        # TODO: double-check this — I couldn't find a definitive answer on whether
+        # gpt-5-nano ignores temperature. Check OpenRouter model page for gpt-5-nano
+        # before shipping. If it does support it, flip this to True.
+        "supports_temperature": False,
+        "supports_top_p": True,
+        "supports_freq_penalty": True,
+        "supports_pres_penalty": True,
+        "recommended": {
+            "temperature": 1.0,
+            "top_p": 1.0,
+            "max_tokens": 512,
+            "freq_pen": 0.0,
+            "pres_pen": 0.0,
+        },
+        "tooltip": "gpt-5-nano uses fixed sampling — Temperature has no effect for this model.",
+    },
+    "openai/gpt-5": {
+        "supports_temperature": True,
+        "supports_top_p": True,
+        "supports_freq_penalty": True,
+        "supports_pres_penalty": True,
+        "recommended": {
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "max_tokens": 2048,
+            "freq_pen": 0.0,
+            "pres_pen": 0.0,
+        },
+        "tooltip": "gpt-5 supports all parameters.",
+    },
+    "qwen3.5:9b": {
+        "supports_temperature": True,
+        "supports_top_p": True,
+        "supports_freq_penalty": False,
+        "supports_pres_penalty": True,
+        "recommended": {
+            "temperature": 0.7,
+            "top_p": 0.8,
+            "max_tokens": 32768,
+            "freq_pen": 0.0,
+            "pres_pen": 1.5,
+        },
+        "tooltip": "Qwen3.5 instruct mode — presence_penalty 1.5 prevents repetition. Frequency penalty is ignored by Ollama.",
+    },
+}
+
 # --- LLM Default Settings (OpenRouter) ---
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_TOP_P = 0.9
@@ -36,12 +100,8 @@ DEFAULT_MAX_TOKENS = 1024
 DEFAULT_FREQUENCY_PENALTY = 0.0
 DEFAULT_PRESENCE_PENALTY = 0.0
 
-# --- Ollama/Qwen3.5 Settings (per official Qwen docs, instruct/non-thinking mode) ---
-OLLAMA_MAX_TOKENS = 32768
-OLLAMA_TEMPERATURE = 0.7
-OLLAMA_TOP_P = 0.8
-OLLAMA_PRESENCE_PENALTY = 1.5
-OLLAMA_TOP_K = 20
+# --- Ollama/Qwen3.5 Settings ---
+OLLAMA_MAX_TOKENS = 32768  # kept temporarily — removed in Task 4 once respond() reads MODEL_CONFIGS
 
 # --- Providers ---
 PROVIDER_OPENROUTER = "openrouter"
