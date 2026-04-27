@@ -107,7 +107,7 @@ def run_gap_analysis(cv: CVProfile, jd: JobDescription) -> GapAnalysis:
 
 def generate_questions(gaps: GapAnalysis, difficulty: str, n: int = 5) -> list[str]:
     gap_list = "\n".join(
-        f"- {g.requirement} (severity: {g.severity})" for g in gaps.gaps[:10]
+        f"- {g.requirement} (severity: {g.severity.value})" for g in gaps.gaps[:10]
     ) or "General technical and behavioural skills"
     user_content = (
         QUESTION_GENERATION.format(num_questions=n, difficulty=difficulty, gaps=gap_list)
@@ -122,10 +122,15 @@ def generate_questions(gaps: GapAnalysis, difficulty: str, n: int = 5) -> list[s
     )
     try:
         data = json.loads(result["content"])
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Question generation failed — invalid JSON: {e}") from e
+    try:
         questions = [str(q) for q in data["questions"][:n]]
         if not questions:
-            raise ValueError("Empty questions list")
-    except Exception as e:
-        raise ValueError(f"Question generation failed: {e}") from e
+            raise ValueError("empty questions list")
+    except KeyError:
+        raise ValueError(
+            f"Question generation failed — 'questions' key missing; got: {list(data.keys())}"
+        )
     logger.info("[pipeline] Questions: %d generated for difficulty=%s", len(questions), difficulty)
     return questions

@@ -4,8 +4,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import json
 from unittest.mock import patch, MagicMock
-from parsers.pipeline import parse_cv, parse_jd
-from db.models import CVProfile, JobDescription
+from parsers.pipeline import (
+    parse_cv, parse_jd,
+    generate_embeddings, run_gap_analysis, generate_questions,
+)
+from db.models import (
+    CVProfile, JobDescription, GapAnalysis,
+    SkillGap, SkillMatch, PartialMatch, RequirementSeverity,
+)
 
 
 CV_JSON = {
@@ -30,10 +36,35 @@ JD_JSON = {
     "summary": "Build scalable data pipelines",
 }
 
+GAPS = GapAnalysis(
+    matching_skills=[SkillMatch(skill="Python", evidence="used in all projects")],
+    gaps=[
+        SkillGap(requirement="Kubernetes", severity=RequirementSeverity.CRITICAL),
+        SkillGap(requirement="Spark", severity=RequirementSeverity.IMPORTANT),
+    ],
+    partial_matches=[PartialMatch(skill="SQL", has="basic queries", needs="window functions")],
+    readiness_score=58,
+)
+
+GAP_JSON = {
+    "matching_skills": [{"skill": "Python", "evidence": "used in all projects"}],
+    "gaps": [
+        {"requirement": "Kubernetes", "severity": "critical"},
+        {"requirement": "Spark", "severity": "important"},
+    ],
+    "partial_matches": [{"skill": "SQL", "has": "basic queries", "needs": "window functions"}],
+    "readiness_score": 58,
+}
+
+CV_PROFILE = CVProfile(**CV_JSON)
+JD_PROFILE = JobDescription(**JD_JSON)
+
 
 def _mock_chat_response(content: dict) -> dict:
     return {"content": json.dumps(content), "model": "gpt-5-mini", "usage": {}}
 
+
+# --- parse_cv ---
 
 def test_parse_cv_returns_cv_profile():
     with patch("parsers.pipeline.chat", return_value=_mock_chat_response(CV_JSON)):
@@ -61,6 +92,8 @@ def test_parse_cv_raises_on_invalid_json():
             assert "CV parse failed" in str(e)
 
 
+# --- parse_jd ---
+
 def test_parse_jd_returns_job_description():
     with patch("parsers.pipeline.chat", return_value=_mock_chat_response(JD_JSON)):
         result = parse_jd("some jd text")
@@ -80,34 +113,7 @@ def test_parse_jd_raises_on_invalid_json():
             assert "JD parse failed" in str(e)
 
 
-# Tests for generate_embeddings, run_gap_analysis, generate_questions
-
-from parsers.pipeline import generate_embeddings, run_gap_analysis, generate_questions
-from db.models import SkillGap, SkillMatch, PartialMatch, RequirementSeverity, GapAnalysis
-
-GAPS = GapAnalysis(
-    matching_skills=[SkillMatch(skill="Python", evidence="used in all projects")],
-    gaps=[
-        SkillGap(requirement="Kubernetes", severity=RequirementSeverity.CRITICAL),
-        SkillGap(requirement="Spark", severity=RequirementSeverity.IMPORTANT),
-    ],
-    partial_matches=[PartialMatch(skill="SQL", has="basic queries", needs="window functions")],
-    readiness_score=58,
-)
-
-GAP_JSON = {
-    "matching_skills": [{"skill": "Python", "evidence": "used in all projects"}],
-    "gaps": [
-        {"requirement": "Kubernetes", "severity": "critical"},
-        {"requirement": "Spark", "severity": "important"},
-    ],
-    "partial_matches": [{"skill": "SQL", "has": "basic queries", "needs": "window functions"}],
-    "readiness_score": 58,
-}
-
-CV_PROFILE = CVProfile(**CV_JSON)
-JD_PROFILE = JobDescription(**JD_JSON)
-
+# --- generate_embeddings ---
 
 def test_generate_embeddings_returns_list():
     mock_client = MagicMock()
@@ -125,6 +131,8 @@ def test_generate_embeddings_returns_none_on_error():
         result = generate_embeddings("some text")
     assert result is None
 
+
+# --- run_gap_analysis ---
 
 def test_run_gap_analysis_returns_gap_analysis():
     with patch("parsers.pipeline.chat", return_value=_mock_chat_response(GAP_JSON)):
@@ -144,6 +152,8 @@ def test_run_gap_analysis_raises_on_bad_json():
             assert "Gap analysis failed" in str(e)
 
 
+# --- generate_questions ---
+
 def test_generate_questions_returns_list_of_strings():
     q_json = {"questions": [
         "How would you deploy to Kubernetes?",
@@ -159,6 +169,25 @@ def test_generate_questions_returns_list_of_strings():
     assert all(isinstance(q, str) for q in result)
 
 
+def test_generate_questions_uses_parse_model():
+    q_json = {"questions": ["Q1", "Q2", "Q3", "Q4", "Q5"]}
+    with patch("parsers.pipeline.chat", return_value=_mock_chat_response(q_json)) as mock_c:
+        generate_questions(GAPS, "medium")
+    call_kwargs = mock_c.call_args[1]
+    assert call_kwargs["model"] == "openai/gpt-5-mini"
+    assert call_kwargs["response_format"] == {"type": "json_object"}
+
+
+def test_generate_questions_gap_list_uses_severity_value():
+    """Verify enum .value is used so prompt gets 'critical' not 'RequirementSeverity.CRITICAL'."""
+    q_json = {"questions": ["Q1"]}
+    with patch("parsers.pipeline.chat", return_value=_mock_chat_response(q_json)) as mock_c:
+        generate_questions(GAPS, "medium", n=1)
+    user_content = mock_c.call_args[1]["messages"][0]["content"]
+    assert "RequirementSeverity" not in user_content
+    assert "critical" in user_content
+
+
 def test_generate_questions_raises_on_bad_response():
     with patch("parsers.pipeline.chat", return_value={"content": "not json", "model": "", "usage": {}}):
         try:
@@ -166,3 +195,14 @@ def test_generate_questions_raises_on_bad_response():
             assert False, "Should have raised ValueError"
         except ValueError as e:
             assert "Question generation failed" in str(e)
+
+
+def test_generate_questions_raises_on_missing_key():
+    """LLM returns valid JSON but without 'questions' key."""
+    with patch("parsers.pipeline.chat", return_value=_mock_chat_response({"answers": []})):
+        try:
+            generate_questions(GAPS, "medium")
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "Question generation failed" in str(e)
+            assert "questions" in str(e).lower()
