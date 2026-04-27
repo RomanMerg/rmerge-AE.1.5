@@ -97,6 +97,7 @@ def respond(message, history, cv_text, jd_text, model, provider,
 
     full_response = ""
     is_ollama = (provider == PROVIDER_OLLAMA)
+    in_think_block = False          # suppress display while think block is open
     effective_max_tokens = MODEL_CONFIGS["qwen3.5:9b"]["recommended"]["max_tokens"] if is_ollama else max_tokens
     try:
         for chunk in chat_stream(
@@ -111,11 +112,15 @@ def respond(message, history, cv_text, jd_text, model, provider,
         ):
             full_response += chunk
             if is_ollama:
+                # Track whether we're inside an unclosed <think> block
+                if "<think>" in full_response:
+                    in_think_block = "</think>" not in full_response
                 display = strip_think_tags(full_response)
+                if display and not in_think_block:
+                    yield display
             else:
-                display = full_response
-            if display:
-                yield display
+                if full_response:
+                    yield full_response
     except Exception as e:
         logger.error("Chat error: %s: %s", type(e).__name__, e, exc_info=True)
         yield "Error (" + type(e).__name__ + "): " + str(e)
