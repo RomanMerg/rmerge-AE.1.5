@@ -146,6 +146,7 @@ class PipelineResult:
 
 
 def run_pipeline(cv_text: str, jd_text: str, difficulty: str = "medium") -> PipelineResult:
+    """Run the full parsing pipeline and persist results. Returns PipelineResult."""
     cv = parse_cv(cv_text)
     jd = parse_jd(jd_text)
 
@@ -160,4 +161,5 @@ def run_pipeline(cv_text: str, jd_text: str, difficulty: str = "medium") -> Pipe
     store_gap_analysis(session_id, cv_id, jd_id, gaps)
 
     questions = generate_questions(gaps, difficulty)
+    logger.info("[pipeline] Complete: session=%s, score=%d", session_id, gaps.readiness_score)
     return PipelineResult(cv=cv, jd=jd, gaps=gaps, questions=questions, session_id=session_id)

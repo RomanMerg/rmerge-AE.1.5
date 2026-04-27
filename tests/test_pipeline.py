@@ -245,7 +245,7 @@ def test_run_pipeline_calls_db_in_order():
     call_order = []
     with patch("parsers.pipeline.parse_cv", return_value=CV_PROFILE), \
          patch("parsers.pipeline.parse_jd", return_value=JD_PROFILE), \
-         patch("parsers.pipeline.generate_embeddings", return_value=None), \
+         patch("parsers.pipeline.generate_embeddings", return_value=None) as mock_embed, \
          patch("parsers.pipeline.run_gap_analysis", return_value=GAPS), \
          patch("parsers.pipeline.generate_questions", return_value=["Q1"]), \
          patch("parsers.pipeline.create_session", side_effect=lambda: call_order.append("session") or "s"), \
@@ -254,3 +254,4 @@ def test_run_pipeline_calls_db_in_order():
          patch("parsers.pipeline.store_gap_analysis", side_effect=lambda *a: call_order.append("gap") or "g"):
         run_pipeline("cv", "jd", "easy")
     assert call_order == ["session", "cv", "jd", "gap"]
+    assert mock_embed.call_count == 2
