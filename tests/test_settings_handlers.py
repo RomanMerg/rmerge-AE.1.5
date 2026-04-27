@@ -126,3 +126,5 @@ def test_recommended_values_unknown_model_uses_defaults():
     temp, top_p, max_tok, freq, pres = _recommended_values_for_model("some/unknown-model")
     assert temp == DEFAULT_TEMPERATURE
     assert top_p == DEFAULT_TOP_P
+
+
