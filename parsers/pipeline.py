@@ -89,7 +89,7 @@ def generate_embeddings(text: str) -> list[float] | None:
             model=MODELS["embed"],
             input=text[:8000],
         )
-        embedding = response.data[0].embedding
+        embedding = response.data[0].embedding[:256]  # Matryoshka: first 256 dims
         logger.info("[pipeline] Embedding: %d dims", len(embedding))
         return embedding
     except Exception as e:
