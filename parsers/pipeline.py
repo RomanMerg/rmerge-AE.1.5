@@ -13,6 +13,21 @@ from config import MODELS, PROVIDER_OPENROUTER
 logger = logging.getLogger(__name__)
 
 
+def _parse_llm_json(raw: str, label: str) -> dict:
+    """Strip markdown fences if present, then json.loads. Raises ValueError on failure."""
+    content = raw.strip()
+    if not content:
+        raise ValueError(f"{label} failed: LLM returned empty response")
+    # Strip ```json ... ``` fences that some models add despite json_object mode
+    if content.startswith("```"):
+        content = content.split("```", 2)[-1] if content.count("```") >= 2 else content
+        content = content.lstrip("json").strip().rstrip("`").strip()
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"{label} failed: invalid JSON — {e}") from e
+
+
 def parse_cv(cv_text: str) -> CVProfile:
     result = chat(
         messages=[
@@ -21,12 +36,13 @@ def parse_cv(cv_text: str) -> CVProfile:
         ],
         model=MODELS["parse"],
         provider=PROVIDER_OPENROUTER,
-        response_format={"type": "json_object"},
-        max_tokens=1024,
+        max_tokens=2048,
     )
     try:
-        data = json.loads(result["content"])
+        data = _parse_llm_json(result["content"], "CV parse")
         cv = CVProfile(**data)
+    except ValueError:
+        raise
     except Exception as e:
         raise ValueError(f"CV parse failed: {e}") from e
     logger.info(
@@ -46,12 +62,13 @@ def parse_jd(jd_text: str) -> JobDescription:
         ],
         model=MODELS["parse"],
         provider=PROVIDER_OPENROUTER,
-        response_format={"type": "json_object"},
-        max_tokens=1024,
+        max_tokens=2048,
     )
     try:
-        data = json.loads(result["content"])
+        data = _parse_llm_json(result["content"], "JD parse")
         jd = JobDescription(**data)
+    except ValueError:
+        raise
     except Exception as e:
         raise ValueError(f"JD parse failed: {e}") from e
     logger.info(
@@ -87,12 +104,13 @@ def run_gap_analysis(cv: CVProfile, jd: JobDescription) -> GapAnalysis:
         ],
         model=MODELS["parse"],
         provider=PROVIDER_OPENROUTER,
-        response_format={"type": "json_object"},
         max_tokens=2048,
     )
     try:
-        data = json.loads(result["content"])
+        data = _parse_llm_json(result["content"], "Gap analysis")
         gaps = GapAnalysis(**data)
+    except ValueError:
+        raise
     except Exception as e:
         raise ValueError(f"Gap analysis failed: {e}") from e
     logger.info(
@@ -117,13 +135,12 @@ def generate_questions(gaps: GapAnalysis, difficulty: str, n: int = 5) -> list[s
         messages=[{"role": "user", "content": user_content}],
         model=MODELS["parse"],
         provider=PROVIDER_OPENROUTER,
-        response_format={"type": "json_object"},
         max_tokens=1024,
     )
     try:
-        data = json.loads(result["content"])
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Question generation failed — invalid JSON: {e}") from e
+        data = _parse_llm_json(result["content"], "Question generation")
+    except ValueError:
+        raise
     try:
         questions = [str(q) for q in data["questions"][:n]]
         if not questions:

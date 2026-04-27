@@ -79,7 +79,7 @@ def test_parse_cv_uses_parse_model():
         parse_cv("cv text")
     call_kwargs = mock_c.call_args[1]
     assert call_kwargs["model"] == "openai/gpt-5-mini"
-    assert call_kwargs["response_format"] == {"type": "json_object"}
+    assert call_kwargs["max_tokens"] == 2048
 
 
 def test_parse_cv_raises_on_invalid_json():
@@ -175,7 +175,7 @@ def test_generate_questions_uses_parse_model():
         generate_questions(GAPS, "medium")
     call_kwargs = mock_c.call_args[1]
     assert call_kwargs["model"] == "openai/gpt-5-mini"
-    assert call_kwargs["response_format"] == {"type": "json_object"}
+    assert "response_format" not in call_kwargs
 
 
 def test_generate_questions_gap_list_uses_severity_value():
