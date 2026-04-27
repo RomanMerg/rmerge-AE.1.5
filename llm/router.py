@@ -50,6 +50,7 @@ def chat(
     frequency_penalty=DEFAULT_FREQUENCY_PENALTY,
     presence_penalty=DEFAULT_PRESENCE_PENALTY,
     response_format=None,
+    extra_body=None,
 ):
     """Non-streaming chat completion."""
     if model is None:
@@ -81,6 +82,9 @@ def chat(
         }
     if response_format:
         kwargs["response_format"] = response_format
+    if extra_body and provider != PROVIDER_OLLAMA:
+        # Merge with existing extra_body if present (e.g. Ollama already sets one)
+        kwargs["extra_body"] = {**kwargs.get("extra_body", {}), **extra_body}
 
     logger.info("[chat] %s model=%s msgs=%d", provider, model, len(messages))
 

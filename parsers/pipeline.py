@@ -37,6 +37,7 @@ def parse_cv(cv_text: str) -> CVProfile:
         model=MODELS["parse"],
         provider=PROVIDER_OPENROUTER,
         max_tokens=2048,
+        extra_body={"reasoning": {"effort": "low"}},
     )
     try:
         data = _parse_llm_json(result["content"], "CV parse")
@@ -63,6 +64,7 @@ def parse_jd(jd_text: str) -> JobDescription:
         model=MODELS["parse"],
         provider=PROVIDER_OPENROUTER,
         max_tokens=2048,
+        extra_body={"reasoning": {"effort": "low"}},
     )
     try:
         data = _parse_llm_json(result["content"], "JD parse")
@@ -105,6 +107,7 @@ def run_gap_analysis(cv: CVProfile, jd: JobDescription) -> GapAnalysis:
         model=MODELS["parse"],
         provider=PROVIDER_OPENROUTER,
         max_tokens=2048,
+        extra_body={"reasoning": {"effort": "low"}},
     )
     try:
         data = _parse_llm_json(result["content"], "Gap analysis")
@@ -136,6 +139,7 @@ def generate_questions(gaps: GapAnalysis, difficulty: str, n: int = 5) -> list[s
         model=MODELS["parse"],
         provider=PROVIDER_OPENROUTER,
         max_tokens=1024,
+        extra_body={"reasoning": {"effort": "low"}},
     )
     try:
         data = _parse_llm_json(result["content"], "Question generation")
