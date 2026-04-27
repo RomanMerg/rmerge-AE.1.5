@@ -30,7 +30,7 @@ def parse_cv(cv_text: str) -> CVProfile:
     except Exception as e:
         raise ValueError(f"CV parse failed: {e}") from e
     logger.info(
-        "[pipeline] CV parsed: %d skills, %sy exp, %d projects",
+        "[pipeline] CV parsed: %d skills, %dy exp, %d projects",
         len(cv.technical_skills),
         cv.years_of_experience or 0,
         len(cv.projects),
