@@ -50,9 +50,9 @@ GAP_ANALYSIS = """Analyze the candidate's fit for this role step by step:
 Think through each step carefully before providing your final assessment.
 
 Return as structured JSON with these keys:
-- matching_skills: list of {{"skill": str, "evidence": str}}
-- gaps: list of {{"requirement": str, "severity": "critical"|"important"|"nice_to_have"}}
-- partial_matches: list of {{"skill": str, "has": str, "needs": str}}
+- matching_skills: list of {"skill": str, "evidence": str}
+- gaps: list of {"requirement": str, "severity": "critical"|"important"|"nice_to_have"}
+- partial_matches: list of {"skill": str, "has": str, "needs": str}
 - readiness_score: integer 0-100"""
 
 # --- Prompt 4: Role-Playing — Interviewer Persona ---
@@ -85,16 +85,16 @@ Start by briefly introducing yourself and asking your first question."""
 JD_EXTRACTION = """Analyze the following job description and extract structured information.
 
 Return ONLY valid JSON matching this exact schema:
-{{
+{
   "role_title": "string",
   "role_level": "junior|mid|senior|lead|principal",
   "requirements": [
-    {{"skill": "string", "severity": "critical|important|nice_to_have"}}
+    {"skill": "string", "severity": "critical|important|nice_to_have"}
   ],
   "nice_to_haves": ["string"],
   "company_type": "startup|scaleup|enterprise|agency|consultancy|other",
   "summary": "one-sentence role summary"
-}}
+}
 
 Be thorough — extract every mentioned skill, tool, technology, and soft skill requirement."""
 
@@ -120,7 +120,7 @@ Then provide an overall assessment:
 Be constructive but honest. The goal is to help the candidate improve.
 
 Return as structured JSON with these keys:
-- answer_evaluations: list of {{"question": str, "answer_quality": int, "strengths": str, "weaknesses": str, "suggested_improvement": str}}
+- answer_evaluations: list of {"question": str, "answer_quality": int, "strengths": str, "weaknesses": str, "suggested_improvement": str}
 - overall_score: integer 0-100
 - overall_feedback: string
 - areas_to_study: list of strings"""
