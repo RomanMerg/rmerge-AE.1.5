@@ -19,7 +19,9 @@ def create_session() -> str:
         "INSERT INTO sessions DEFAULT VALUES RETURNING id",
         fetch=True,
     )
-    return str(rows[0]["id"])
+    session_id = str(rows[0]["id"])
+    logger.debug("[db] session created: %s", session_id)
+    return session_id
 
 
 def store_cv_profile(
@@ -35,7 +37,9 @@ def store_cv_profile(
         (session_id, raw_text, json.dumps(cv.model_dump()), _vec_literal(embedding)),
         fetch=True,
     )
-    return str(rows[0]["id"])
+    cv_id = str(rows[0]["id"])
+    logger.debug("[db] cv_profile stored: %s", cv_id)
+    return cv_id
 
 
 def store_jd(
@@ -51,7 +55,9 @@ def store_jd(
         (session_id, raw_text, json.dumps(jd.model_dump()), _vec_literal(embedding)),
         fetch=True,
     )
-    return str(rows[0]["id"])
+    jd_id = str(rows[0]["id"])
+    logger.debug("[db] job_description stored: %s", jd_id)
+    return jd_id
 
 
 def store_gap_analysis(
@@ -67,4 +73,6 @@ def store_gap_analysis(
         (session_id, cv_id, jd_id, json.dumps(gaps.model_dump()), gaps.readiness_score),
         fetch=True,
     )
-    return str(rows[0]["id"])
+    gap_id = str(rows[0]["id"])
+    logger.debug("[db] gap_analysis stored: %s score=%d", gap_id, gaps.readiness_score)
+    return gap_id

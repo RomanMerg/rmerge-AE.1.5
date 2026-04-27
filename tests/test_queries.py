@@ -71,6 +71,7 @@ def test_store_jd():
         result = store_jd("sess-1", "raw jd text", JD, None)
     assert result == "jd-uuid"
     _, params = mock_q.call_args[0]
+    assert params[0] == "sess-1"
     assert params[1] == "raw jd text"
     assert json.loads(params[2])["role_title"] == "Data Engineer"
 
