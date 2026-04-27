@@ -192,6 +192,40 @@ def chat_stream(
         yield "[LLM Error: " + str(e) + "]"
 
 
+def chat_collect(
+    messages, model=None, provider=PROVIDER_OPENROUTER,
+    temperature=DEFAULT_TEMPERATURE, top_p=DEFAULT_TOP_P,
+    max_tokens=DEFAULT_MAX_TOKENS,
+    frequency_penalty=DEFAULT_FREQUENCY_PENALTY,
+    presence_penalty=DEFAULT_PRESENCE_PENALTY,
+) -> str:
+    """Collect full streamed response into a single string.
+
+    Reasoning models (gpt-5-mini, o4-mini) return None in choices[0].message.content
+    on non-streaming calls but deliver content correctly via the streaming path.
+    This function uses streaming internally and joins the content chunks.
+    Think/reasoning tags are stripped automatically.
+    """
+    chunks = []
+    for chunk in chat_stream(
+        messages=messages,
+        model=model,
+        provider=provider,
+        temperature=temperature,
+        top_p=top_p,
+        max_tokens=max_tokens,
+        frequency_penalty=frequency_penalty,
+        presence_penalty=presence_penalty,
+    ):
+        # skip reasoning tags emitted by Ollama path
+        if chunk in ("<think>", "</think>"):
+            continue
+        chunks.append(chunk)
+    content = "".join(chunks).strip()
+    logger.info("[collect] %s model=%s len=%d", provider, model or MODELS["chat"], len(content))
+    return content
+
+
 def smoke_test(provider=PROVIDER_OPENROUTER):
     """Quick connection test."""
     if provider == PROVIDER_OPENROUTER:

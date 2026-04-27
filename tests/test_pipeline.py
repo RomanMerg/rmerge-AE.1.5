@@ -60,14 +60,15 @@ CV_PROFILE = CVProfile(**CV_JSON)
 JD_PROFILE = JobDescription(**JD_JSON)
 
 
-def _mock_chat_response(content: dict) -> dict:
-    return {"content": json.dumps(content), "model": "gpt-5-mini", "usage": {}}
+def _mock_collect(content: dict) -> str:
+    """chat_collect now returns a plain string, not a dict."""
+    return json.dumps(content)
 
 
 # --- parse_cv ---
 
 def test_parse_cv_returns_cv_profile():
-    with patch("parsers.pipeline.chat", return_value=_mock_chat_response(CV_JSON)):
+    with patch("parsers.pipeline.chat_collect", return_value=_mock_collect(CV_JSON)):
         result = parse_cv("some cv text")
     assert isinstance(result, CVProfile)
     assert result.technical_skills == ["Python", "SQL", "Docker"]
@@ -75,7 +76,7 @@ def test_parse_cv_returns_cv_profile():
 
 
 def test_parse_cv_uses_parse_model():
-    with patch("parsers.pipeline.chat", return_value=_mock_chat_response(CV_JSON)) as mock_c:
+    with patch("parsers.pipeline.chat_collect", return_value=_mock_collect(CV_JSON)) as mock_c:
         parse_cv("cv text")
     call_kwargs = mock_c.call_args[1]
     assert call_kwargs["model"] == "openai/gpt-5-mini"
@@ -83,8 +84,7 @@ def test_parse_cv_uses_parse_model():
 
 
 def test_parse_cv_raises_on_invalid_json():
-    bad_response = {"content": "not json", "model": "gpt-5-mini", "usage": {}}
-    with patch("parsers.pipeline.chat", return_value=bad_response):
+    with patch("parsers.pipeline.chat_collect", return_value="not json"):
         try:
             parse_cv("cv text")
             assert False, "Should have raised ValueError"
@@ -95,7 +95,7 @@ def test_parse_cv_raises_on_invalid_json():
 # --- parse_jd ---
 
 def test_parse_jd_returns_job_description():
-    with patch("parsers.pipeline.chat", return_value=_mock_chat_response(JD_JSON)):
+    with patch("parsers.pipeline.chat_collect", return_value=_mock_collect(JD_JSON)):
         result = parse_jd("some jd text")
     assert isinstance(result, JobDescription)
     assert result.role_title == "Data Engineer"
@@ -104,8 +104,7 @@ def test_parse_jd_returns_job_description():
 
 
 def test_parse_jd_raises_on_invalid_json():
-    bad_response = {"content": "{broken", "model": "gpt-5-mini", "usage": {}}
-    with patch("parsers.pipeline.chat", return_value=bad_response):
+    with patch("parsers.pipeline.chat_collect", return_value="{broken"):
         try:
             parse_jd("jd text")
             assert False, "Should have raised ValueError"
@@ -135,7 +134,7 @@ def test_generate_embeddings_returns_none_on_error():
 # --- run_gap_analysis ---
 
 def test_run_gap_analysis_returns_gap_analysis():
-    with patch("parsers.pipeline.chat", return_value=_mock_chat_response(GAP_JSON)):
+    with patch("parsers.pipeline.chat_collect", return_value=_mock_collect(GAP_JSON)):
         result = run_gap_analysis(CV_PROFILE, JD_PROFILE)
     assert isinstance(result, GapAnalysis)
     assert result.readiness_score == 58
@@ -144,7 +143,7 @@ def test_run_gap_analysis_returns_gap_analysis():
 
 
 def test_run_gap_analysis_raises_on_bad_json():
-    with patch("parsers.pipeline.chat", return_value={"content": "bad", "model": "", "usage": {}}):
+    with patch("parsers.pipeline.chat_collect", return_value="bad"):
         try:
             run_gap_analysis(CV_PROFILE, JD_PROFILE)
             assert False, "Should have raised ValueError"
@@ -162,7 +161,7 @@ def test_generate_questions_returns_list_of_strings():
         "Tell me about a data pipeline you built.",
         "How do you handle pipeline failures?",
     ]}
-    with patch("parsers.pipeline.chat", return_value=_mock_chat_response(q_json)):
+    with patch("parsers.pipeline.chat_collect", return_value=_mock_collect(q_json)):
         result = generate_questions(GAPS, "medium", n=5)
     assert isinstance(result, list)
     assert len(result) == 5
@@ -171,7 +170,7 @@ def test_generate_questions_returns_list_of_strings():
 
 def test_generate_questions_uses_parse_model():
     q_json = {"questions": ["Q1", "Q2", "Q3", "Q4", "Q5"]}
-    with patch("parsers.pipeline.chat", return_value=_mock_chat_response(q_json)) as mock_c:
+    with patch("parsers.pipeline.chat_collect", return_value=_mock_collect(q_json)) as mock_c:
         generate_questions(GAPS, "medium")
     call_kwargs = mock_c.call_args[1]
     assert call_kwargs["model"] == "openai/gpt-5-mini"
@@ -181,7 +180,7 @@ def test_generate_questions_uses_parse_model():
 def test_generate_questions_gap_list_uses_severity_value():
     """Verify enum .value is used so prompt gets 'critical' not 'RequirementSeverity.CRITICAL'."""
     q_json = {"questions": ["Q1"]}
-    with patch("parsers.pipeline.chat", return_value=_mock_chat_response(q_json)) as mock_c:
+    with patch("parsers.pipeline.chat_collect", return_value=_mock_collect(q_json)) as mock_c:
         generate_questions(GAPS, "medium", n=1)
     user_content = mock_c.call_args[1]["messages"][0]["content"]
     assert "RequirementSeverity" not in user_content
@@ -189,7 +188,7 @@ def test_generate_questions_gap_list_uses_severity_value():
 
 
 def test_generate_questions_raises_on_bad_response():
-    with patch("parsers.pipeline.chat", return_value={"content": "not json", "model": "", "usage": {}}):
+    with patch("parsers.pipeline.chat_collect", return_value="not json"):
         try:
             generate_questions(GAPS, "medium")
             assert False, "Should have raised ValueError"
@@ -199,7 +198,7 @@ def test_generate_questions_raises_on_bad_response():
 
 def test_generate_questions_raises_on_missing_key():
     """LLM returns valid JSON but without 'questions' key."""
-    with patch("parsers.pipeline.chat", return_value=_mock_chat_response({"answers": []})):
+    with patch("parsers.pipeline.chat_collect", return_value=_mock_collect({"answers": []})):
         try:
             generate_questions(GAPS, "medium")
             assert False, "Should have raised ValueError"

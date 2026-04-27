@@ -4,7 +4,7 @@ import json
 import logging
 from dataclasses import dataclass
 
-from llm.router import chat, get_ollama_client
+from llm.router import chat_collect, get_ollama_client
 from llm.prompts import CV_EXTRACTION, JD_EXTRACTION, GAP_ANALYSIS, QUESTION_GENERATION
 from db.models import CVProfile, JobDescription, GapAnalysis, RequirementSeverity
 from db.queries import create_session, store_cv_profile, store_jd, store_gap_analysis
@@ -29,7 +29,7 @@ def _parse_llm_json(raw: str, label: str) -> dict:
 
 
 def parse_cv(cv_text: str) -> CVProfile:
-    result = chat(
+    raw = chat_collect(
         messages=[
             {"role": "system", "content": CV_EXTRACTION},
             {"role": "user", "content": cv_text},
@@ -39,7 +39,7 @@ def parse_cv(cv_text: str) -> CVProfile:
         max_tokens=2048,
     )
     try:
-        data = _parse_llm_json(result["content"], "CV parse")
+        data = _parse_llm_json(raw, "CV parse")
         cv = CVProfile(**data)
     except ValueError:
         raise
@@ -55,7 +55,7 @@ def parse_cv(cv_text: str) -> CVProfile:
 
 
 def parse_jd(jd_text: str) -> JobDescription:
-    result = chat(
+    raw = chat_collect(
         messages=[
             {"role": "system", "content": JD_EXTRACTION},
             {"role": "user", "content": jd_text},
@@ -65,7 +65,7 @@ def parse_jd(jd_text: str) -> JobDescription:
         max_tokens=2048,
     )
     try:
-        data = _parse_llm_json(result["content"], "JD parse")
+        data = _parse_llm_json(raw, "JD parse")
         jd = JobDescription(**data)
     except ValueError:
         raise
@@ -97,7 +97,7 @@ def generate_embeddings(text: str) -> list[float] | None:
 
 def run_gap_analysis(cv: CVProfile, jd: JobDescription) -> GapAnalysis:
     context = json.dumps({"cv": cv.model_dump(), "job_description": jd.model_dump()})
-    result = chat(
+    raw = chat_collect(
         messages=[
             {"role": "system", "content": GAP_ANALYSIS},
             {"role": "user", "content": f"Analyze this CV and job description:\n{context}"},
@@ -107,7 +107,7 @@ def run_gap_analysis(cv: CVProfile, jd: JobDescription) -> GapAnalysis:
         max_tokens=2048,
     )
     try:
-        data = _parse_llm_json(result["content"], "Gap analysis")
+        data = _parse_llm_json(raw, "Gap analysis")
         gaps = GapAnalysis(**data)
     except ValueError:
         raise
@@ -131,14 +131,14 @@ def generate_questions(gaps: GapAnalysis, difficulty: str, n: int = 5) -> list[s
         QUESTION_GENERATION.format(num_questions=n, difficulty=difficulty, gaps=gap_list)
         + '\n\nReturn ONLY a JSON object with key "questions" containing an array of strings.'
     )
-    result = chat(
+    raw = chat_collect(
         messages=[{"role": "user", "content": user_content}],
         model=MODELS["parse"],
         provider=PROVIDER_OPENROUTER,
         max_tokens=1024,
     )
     try:
-        data = _parse_llm_json(result["content"], "Question generation")
+        data = _parse_llm_json(raw, "Question generation")
     except ValueError:
         raise
     try:
