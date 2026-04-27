@@ -206,3 +206,51 @@ def test_generate_questions_raises_on_missing_key():
         except ValueError as e:
             assert "Question generation failed" in str(e)
             assert "questions" in str(e).lower()
+
+
+# --- run_pipeline (orchestrator) ---
+
+from parsers.pipeline import run_pipeline, PipelineResult
+
+
+def test_run_pipeline_returns_pipeline_result():
+    with patch("parsers.pipeline.parse_cv", return_value=CV_PROFILE), \
+         patch("parsers.pipeline.parse_jd", return_value=JD_PROFILE), \
+         patch("parsers.pipeline.generate_embeddings", return_value=None), \
+         patch("parsers.pipeline.run_gap_analysis", return_value=GAPS), \
+         patch("parsers.pipeline.generate_questions", return_value=["Q1", "Q2", "Q3", "Q4", "Q5"]), \
+         patch("parsers.pipeline.create_session", return_value="sess-uuid"), \
+         patch("parsers.pipeline.store_cv_profile", return_value="cv-uuid"), \
+         patch("parsers.pipeline.store_jd", return_value="jd-uuid"), \
+         patch("parsers.pipeline.store_gap_analysis", return_value="gap-uuid"):
+        result = run_pipeline("cv text", "jd text", "medium")
+    assert isinstance(result, PipelineResult)
+    assert result.session_id == "sess-uuid"
+    assert result.cv == CV_PROFILE
+    assert result.jd == JD_PROFILE
+    assert result.gaps == GAPS
+    assert result.questions == ["Q1", "Q2", "Q3", "Q4", "Q5"]
+
+
+def test_run_pipeline_propagates_cv_parse_error():
+    with patch("parsers.pipeline.parse_cv", side_effect=ValueError("CV parse failed: bad json")):
+        try:
+            run_pipeline("bad cv", "jd text", "medium")
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "CV parse failed" in str(e)
+
+
+def test_run_pipeline_calls_db_in_order():
+    call_order = []
+    with patch("parsers.pipeline.parse_cv", return_value=CV_PROFILE), \
+         patch("parsers.pipeline.parse_jd", return_value=JD_PROFILE), \
+         patch("parsers.pipeline.generate_embeddings", return_value=None), \
+         patch("parsers.pipeline.run_gap_analysis", return_value=GAPS), \
+         patch("parsers.pipeline.generate_questions", return_value=["Q1"]), \
+         patch("parsers.pipeline.create_session", side_effect=lambda: call_order.append("session") or "s"), \
+         patch("parsers.pipeline.store_cv_profile", side_effect=lambda *a: call_order.append("cv") or "c"), \
+         patch("parsers.pipeline.store_jd", side_effect=lambda *a: call_order.append("jd") or "j"), \
+         patch("parsers.pipeline.store_gap_analysis", side_effect=lambda *a: call_order.append("gap") or "g"):
+        run_pipeline("cv", "jd", "easy")
+    assert call_order == ["session", "cv", "jd", "gap"]

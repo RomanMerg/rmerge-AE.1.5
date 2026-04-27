@@ -134,3 +134,30 @@ def generate_questions(gaps: GapAnalysis, difficulty: str, n: int = 5) -> list[s
         )
     logger.info("[pipeline] Questions: %d generated for difficulty=%s", len(questions), difficulty)
     return questions
+
+
+@dataclass
+class PipelineResult:
+    cv: CVProfile
+    jd: JobDescription
+    gaps: GapAnalysis
+    questions: list[str]
+    session_id: str
+
+
+def run_pipeline(cv_text: str, jd_text: str, difficulty: str = "medium") -> PipelineResult:
+    cv = parse_cv(cv_text)
+    jd = parse_jd(jd_text)
+
+    cv_embedding = generate_embeddings(cv_text)
+    jd_embedding = generate_embeddings(jd_text)
+
+    session_id = create_session()
+    cv_id = store_cv_profile(session_id, cv_text, cv, cv_embedding)
+    jd_id = store_jd(session_id, jd_text, jd, jd_embedding)
+
+    gaps = run_gap_analysis(cv, jd)
+    store_gap_analysis(session_id, cv_id, jd_id, gaps)
+
+    questions = generate_questions(gaps, difficulty)
+    return PipelineResult(cv=cv, jd=jd, gaps=gaps, questions=questions, session_id=session_id)
