@@ -3,7 +3,7 @@
 import json
 import logging
 from db.connection import execute_query
-from db.models import CVProfile, JobDescription, GapAnalysis
+from db.models import CVProfile, JobDescription, GapAnalysis, SessionEvaluation
 
 logger = logging.getLogger(__name__)
 
@@ -76,3 +76,16 @@ def store_gap_analysis(
     gap_id = str(rows[0]["id"])
     logger.debug("[db] gap_analysis stored: %s score=%d", gap_id, gaps.readiness_score)
     return gap_id
+
+
+def store_evaluation(session_id: str, evaluation: SessionEvaluation) -> str:
+    rows = execute_query(
+        """INSERT INTO evaluations (session_id, evaluation, overall_score)
+           VALUES (%s, %s, %s)
+           RETURNING id""",
+        (session_id, json.dumps(evaluation.model_dump()), evaluation.overall_score),
+        fetch=True,
+    )
+    eval_id = str(rows[0]["id"])
+    logger.debug("[db] evaluation stored: %s score=%d", eval_id, evaluation.overall_score)
+    return eval_id

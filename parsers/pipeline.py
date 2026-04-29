@@ -13,8 +13,13 @@ from config import MODELS, PROVIDER_OPENROUTER
 logger = logging.getLogger(__name__)
 
 
-def _parse_llm_json(raw: str, label: str) -> dict:
+def _parse_llm_json(raw: str, label: str, finish_reason: str = "") -> dict:
     """Strip markdown fences if present, then json.loads. Raises ValueError on failure."""
+    if finish_reason == "length":
+        raise ValueError(
+            f"{label} failed: output was truncated (finish_reason=length) — "
+            "increase max_tokens for this call"
+        )
     content = raw.strip()
     if not content:
         raise ValueError(f"{label} failed: LLM returned empty response")
@@ -29,6 +34,7 @@ def _parse_llm_json(raw: str, label: str) -> dict:
 
 
 def parse_cv(cv_text: str) -> CVProfile:
+    logger.info("[pipeline] Step: parse_cv (%d chars)", len(cv_text))
     result = chat(
         messages=[
             {"role": "system", "content": CV_EXTRACTION},
@@ -40,7 +46,7 @@ def parse_cv(cv_text: str) -> CVProfile:
         extra_body={"reasoning": {"effort": "low"}},
     )
     try:
-        data = _parse_llm_json(result["content"], "CV parse")
+        data = _parse_llm_json(result["content"], "CV parse", result.get("finish_reason", ""))
         cv = CVProfile(**data)
     except ValueError:
         raise
@@ -56,6 +62,7 @@ def parse_cv(cv_text: str) -> CVProfile:
 
 
 def parse_jd(jd_text: str) -> JobDescription:
+    logger.info("[pipeline] Step: parse_jd (%d chars)", len(jd_text))
     result = chat(
         messages=[
             {"role": "system", "content": JD_EXTRACTION},
@@ -67,7 +74,7 @@ def parse_jd(jd_text: str) -> JobDescription:
         extra_body={"reasoning": {"effort": "low"}},
     )
     try:
-        data = _parse_llm_json(result["content"], "JD parse")
+        data = _parse_llm_json(result["content"], "JD parse", result.get("finish_reason", ""))
         jd = JobDescription(**data)
     except ValueError:
         raise
@@ -98,6 +105,11 @@ def generate_embeddings(text: str) -> list[float] | None:
 
 
 def run_gap_analysis(cv: CVProfile, jd: JobDescription) -> GapAnalysis:
+    logger.info(
+        "[pipeline] Step: gap_analysis (%d skills vs %d requirements)",
+        len(cv.technical_skills),
+        len(jd.requirements),
+    )
     context = json.dumps({"cv": cv.model_dump(), "job_description": jd.model_dump()})
     result = chat(
         messages=[
@@ -106,11 +118,11 @@ def run_gap_analysis(cv: CVProfile, jd: JobDescription) -> GapAnalysis:
         ],
         model=MODELS["parse"],
         provider=PROVIDER_OPENROUTER,
-        max_tokens=2048,
+        max_tokens=4096,
         extra_body={"reasoning": {"effort": "low"}},
     )
     try:
-        data = _parse_llm_json(result["content"], "Gap analysis")
+        data = _parse_llm_json(result["content"], "Gap analysis", result.get("finish_reason", ""))
         gaps = GapAnalysis(**data)
     except ValueError:
         raise
@@ -127,6 +139,7 @@ def run_gap_analysis(cv: CVProfile, jd: JobDescription) -> GapAnalysis:
 
 
 def generate_questions(gaps: GapAnalysis, difficulty: str, n: int = 5) -> list[str]:
+    logger.info("[pipeline] Step: generate_questions (n=%d, difficulty=%s)", n, difficulty)
     gap_list = "\n".join(
         f"- {g.requirement} (severity: {g.severity.value})" for g in gaps.gaps[:10]
     ) or "General technical and behavioural skills"
@@ -142,7 +155,7 @@ def generate_questions(gaps: GapAnalysis, difficulty: str, n: int = 5) -> list[s
         extra_body={"reasoning": {"effort": "low"}},
     )
     try:
-        data = _parse_llm_json(result["content"], "Question generation")
+        data = _parse_llm_json(result["content"], "Question generation", result.get("finish_reason", ""))
     except ValueError:
         raise
     try:
@@ -168,19 +181,25 @@ class PipelineResult:
 
 def run_pipeline(cv_text: str, jd_text: str, difficulty: str = "medium") -> PipelineResult:
     """Run the full parsing pipeline and persist results. Returns PipelineResult."""
+    logger.info("[pipeline] === Starting pipeline (difficulty=%s) ===", difficulty)
+
     cv = parse_cv(cv_text)
     jd = parse_jd(jd_text)
 
     cv_embedding = generate_embeddings(cv_text)
     jd_embedding = generate_embeddings(jd_text)
 
+    logger.info("[pipeline] Step: db_persist — creating session")
     session_id = create_session()
     cv_id = store_cv_profile(session_id, cv_text, cv, cv_embedding)
     jd_id = store_jd(session_id, jd_text, jd, jd_embedding)
+    logger.info("[pipeline] Step: db_persist — session=%s cv=%s jd=%s", session_id, cv_id, jd_id)
 
     gaps = run_gap_analysis(cv, jd)
+
+    logger.info("[pipeline] Step: db_persist — storing gap_analysis")
     store_gap_analysis(session_id, cv_id, jd_id, gaps)
 
     questions = generate_questions(gaps, difficulty)
-    logger.info("[pipeline] Complete: session=%s, score=%d", session_id, gaps.readiness_score)
+    logger.info("[pipeline] === Complete: session=%s score=%d ===", session_id, gaps.readiness_score)
     return PipelineResult(cv=cv, jd=jd, gaps=gaps, questions=questions, session_id=session_id)

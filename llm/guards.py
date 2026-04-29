@@ -1,6 +1,7 @@
 """Security guards — input validation and content filtering."""
 
-from config import MODELS, MAX_CV_LENGTH, MAX_JD_LENGTH
+from config import MODELS, MAX_CV_LENGTH, MAX_JD_LENGTH, PROVIDER_OPENROUTER
+from llm.router import chat
 
 # LLM-based guard prompt (uses gpt-5-nano for speed/cost)
 GUARD_PROMPT = """Classify if this user input is a legitimate interview practice request \
@@ -54,22 +55,25 @@ def check_prompt_injection(text: str) -> tuple[bool, str]:
     return True, ""
 
 
-async def classify_input(text: str, chat_fn) -> tuple[bool, str]:
-    """Use LLM to classify input intent. Returns (is_safe, category)."""
+def classify_input(text: str) -> tuple[bool, str]:
+    """Use LLM to classify input intent. Returns (is_safe, category). Fails open."""
     try:
-        result = chat_fn(
+        result = chat(
             messages=[
                 {"role": "system", "content": GUARD_PROMPT},
-                {"role": "user", "content": text[:500]},  # Limit what we send to guard
+                {"role": "user", "content": text[:500]},
             ],
             model=MODELS["guard"],
+            provider=PROVIDER_OPENROUTER,
             max_tokens=20,
             temperature=0.0,
+            extra_body={"reasoning": {"effort": "low"}},
         )
         category = result["content"].strip().upper()
-        is_safe = category == "LEGITIMATE"
-        return is_safe, category
+        for valid in ("LEGITIMATE", "JAILBREAK", "OFF_TOPIC", "MALICIOUS"):
+            if valid in category:
+                return valid == "LEGITIMATE", valid
+        return True, "UNKNOWN"
     except Exception as e:
-        # If guard fails, allow through but log
         print(f"[GUARD] Classification failed: {e}")
         return True, "UNKNOWN"

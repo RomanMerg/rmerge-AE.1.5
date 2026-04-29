@@ -175,13 +175,15 @@ def chat_stream(
             delta = chunk.choices[0].delta if chunk.choices else None
             if not delta:
                 continue
-            # Ollama sends Qwen3 reasoning in delta.reasoning — wrap in tags so strip_think_tags filters it
-            reasoning = getattr(delta, "reasoning", None)
-            if reasoning:
-                if not in_reasoning:
-                    yield "<think>"
-                    in_reasoning = True
-                yield reasoning
+            # Ollama/Qwen3 sends reasoning in delta.reasoning — wrap in tags for stripping
+            # OpenRouter reasoning models also set delta.reasoning; skip it (internal thinking)
+            if provider == PROVIDER_OLLAMA:
+                reasoning = getattr(delta, "reasoning", None)
+                if reasoning:
+                    if not in_reasoning:
+                        yield "<think>"
+                        in_reasoning = True
+                    yield reasoning
             if delta.content:
                 if in_reasoning:
                     yield "</think>"

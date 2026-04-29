@@ -17,7 +17,9 @@ from config import (
     PROVIDER_OPENROUTER, PROVIDER_OLLAMA, MODELS, MODEL_CONFIGS,
 )
 from llm.router import chat, chat_stream, smoke_test
-from llm.guards import validate_cv, validate_jd, check_prompt_injection
+from llm.guards import validate_cv, validate_jd, check_prompt_injection, classify_input
+from llm.judge import evaluate_session
+from db.queries import store_evaluation
 from llm.user_prompts import INPUT_TEMPLATES
 from db.connection import init_db, test_connection
 from utils.cost_tracker import SessionCostTracker
@@ -38,8 +40,72 @@ def strip_think_tags(text):
     return cleaned.strip()
 
 
-def _build_system_parts(cv_text, jd_text, persona, difficulty, pipeline_result):
+def _build_system_parts(cv_text, jd_text, persona, difficulty, pipeline_result, chat_mode="practice"):
     """Build system prompt parts — extracted for testability."""
+
+    if chat_mode == "study":
+        parts = [
+            "You are a highly skilled technical candidate demonstrating strong interview answers.",
+            "Difficulty level: " + difficulty + ".",
+        ]
+        if pipeline_result is not None:
+            cv = pipeline_result.cv
+            jd = pipeline_result.jd
+            parts.append(
+                f"\nYou are interviewing for: {jd.role_title} ({jd.role_level}) "
+                f"at a {jd.company_type} company."
+            )
+            if jd.summary:
+                parts.append(f"Role: {jd.summary}")
+            parts.append("\nYour background: " + ", ".join(cv.technical_skills[:15]))
+            if cv.years_of_experience:
+                parts.append(f"Years of experience: {cv.years_of_experience}")
+            if cv.summary:
+                parts.append(f"Professional summary: {cv.summary}")
+        else:
+            if cv_text and cv_text.strip():
+                parts.append("\nYour background:\n" + cv_text[:2000])
+            if jd_text and jd_text.strip():
+                parts.append("\nTarget role:\n" + jd_text[:1000])
+        parts.append(
+            "\nWhen the user sends a prompt or interview question, respond as a strong candidate would."
+            " Use your background to give specific, structured answers."
+            " Lead with your strongest evidence, acknowledge gaps honestly, be concise but thorough."
+        )
+        return parts
+
+    if chat_mode == "interview":
+        parts = [
+            "You are a professional hiring manager conducting a formal job interview.",
+            "Difficulty level: " + difficulty + ".",
+        ]
+        if pipeline_result is not None:
+            jd = pipeline_result.jd
+            gaps = pipeline_result.gaps
+            parts.append(
+                f"\nYou are interviewing for: {jd.role_title} ({jd.role_level}) "
+                f"at a {jd.company_type} company."
+            )
+            if jd.summary:
+                parts.append(f"Role: {jd.summary}")
+            if gaps.gaps:
+                parts.append(
+                    "Key areas to probe: " + ", ".join(g.requirement for g in gaps.gaps[:5])
+                )
+            parts.append(f"Readiness score: {gaps.readiness_score}/100 (internal — do not reveal).")
+        else:
+            if cv_text and cv_text.strip():
+                parts.append("\nCandidate CV:\n" + cv_text[:2000])
+            if jd_text and jd_text.strip():
+                parts.append("\nJob description:\n" + jd_text[:2000])
+        parts.append(
+            "\nConduct a realistic, formal interview. Ask one focused prompt at a time."
+            " Do NOT provide feedback, hints, or coaching mid-session — stay strictly in character."
+            " After 6–8 prompts offer to conclude. Save all evaluation for the end."
+        )
+        return parts
+
+    # --- practice mode (default) ---
     parts = [
         "You are a " + persona + " technical interviewer.",
         "Difficulty level: " + difficulty + ".",
@@ -66,23 +132,26 @@ def _build_system_parts(cv_text, jd_text, persona, difficulty, pipeline_result):
         if jd_text and jd_text.strip():
             parts.append("\nJob description:\n" + jd_text[:2000])
     parts.append(
-        "\nAsk interview questions one at a time. "
+        "\nAsk interview prompts one at a time. "
         "After the candidate answers, provide brief feedback "
-        "and ask the next question. Stay in character."
+        "and ask the next prompt. Stay in character."
     )
     return parts
 
 
 def respond(message, history, cv_text, jd_text, model, provider,
             temperature, top_p, max_tokens, freq_pen, pres_pen,
-            persona, difficulty, pipeline_result):
+            persona, difficulty, pipeline_result, chat_mode="practice"):
     """Handle chat messages with streaming."""
     safe, reason = check_prompt_injection(message)
+    if safe:
+        safe, reason = classify_input(message)
+    logger.info("Guard: %s", reason)
     if not safe:
         yield "Input blocked: " + reason
         return
 
-    system_parts = _build_system_parts(cv_text, jd_text, persona, difficulty, pipeline_result)
+    system_parts = _build_system_parts(cv_text, jd_text, persona, difficulty, pipeline_result, chat_mode)
 
     messages = [{"role": "system", "content": "\n".join(system_parts)}]
     for msg in history:
@@ -199,6 +268,41 @@ def handle_confirm(cv_text, jd_text, difficulty):
         yield (f"Error: {e}", None, "", "", "", "", "", "")
     except Exception as e:
         yield (f"Error ({type(e).__name__}): {e}", None, "", "", "", "", "", "")
+
+
+def format_evaluation_md(evaluation) -> str:
+    """Format SessionEvaluation as readable markdown."""
+    lines = [f"## Overall Score: {evaluation.overall_score}/100", ""]
+    lines.append(evaluation.overall_feedback)
+    if evaluation.areas_to_study:
+        lines.append("\n### Areas to Study")
+        for area in evaluation.areas_to_study:
+            lines.append(f"- {area}")
+    if evaluation.answer_evaluations:
+        lines.append("\n### Per-Answer Breakdown")
+        for i, ae in enumerate(evaluation.answer_evaluations, 1):
+            lines.append(f"\n**Q{i}: {ae.question}** — Quality: {ae.answer_quality}/10")
+            lines.append(f"- **Strengths:** {ae.strengths}")
+            lines.append(f"- **Weaknesses:** {ae.weaknesses}")
+            lines.append(f"- **Improvement:** {ae.suggested_improvement}")
+    return "\n".join(lines)
+
+
+def handle_evaluate(history, pipeline_result):
+    """Run LLM-as-Judge on the chat history and return formatted markdown."""
+    if not history:
+        return "No conversation to evaluate yet.", gr.Button(interactive=True)
+    try:
+        evaluation = evaluate_session(history, pipeline_result)
+        if pipeline_result is not None and pipeline_result.session_id:
+            try:
+                store_evaluation(pipeline_result.session_id, evaluation)
+            except Exception as e:
+                logger.warning("Could not persist evaluation: %s", e)
+        return format_evaluation_md(evaluation), gr.Button(interactive=True)
+    except Exception as e:
+        logger.error("Evaluation failed: %s", e, exc_info=True)
+        return f"Evaluation failed: {e}", gr.Button(interactive=True)
 
 
 def _model_choices_for_provider(provider):
@@ -364,17 +468,40 @@ def create_app():
                 # so it can be passed as an additional_input
                 pipeline_state = gr.State(None)
 
+                chat_mode = gr.Radio(
+                    choices=[
+                        ("Practice — LLM coaches you through prompts and gives feedback after each answer", "practice"),
+                        ("Study — send any prompt, LLM demonstrates a model candidate answer using your CV", "study"),
+                        ("Interview — full simulation, LLM is the hiring manager (no mid-session coaching)", "interview"),
+                    ],
+                    value="practice",
+                    label="Chat Mode",
+                    info="Switch at any time — takes effect on the next message.",
+                )
+
+                # Explicit chatbot reference so evaluate button can read history
+                chatbot = gr.Chatbot(height=500)
+
                 gr.ChatInterface(
                     fn=respond,
+                    chatbot=chatbot,
                     textbox=chat_input,
                     additional_inputs=[
                         cv_text, jd_text, model, provider,
                         temperature, top_p, max_tokens,
                         freq_pen, pres_pen, persona, difficulty,
-                        pipeline_state,
+                        pipeline_state, chat_mode,
                     ],
                     fill_height=True,
                 )
+
+                evaluate_btn = gr.Button(
+                    "Evaluate Session",
+                    variant="secondary",
+                    interactive=False,
+                )
+                with gr.Accordion("Session Evaluation", open=False) as eval_accordion:
+                    eval_output = gr.Markdown("*Run a practice session first, then click Evaluate.*")
 
                 with gr.Accordion("Input Templates", open=False):
                     for t in INPUT_TEMPLATES:
@@ -391,14 +518,14 @@ def create_app():
                                 outputs=[chat_input],
                             )
 
-                with gr.Accordion("Generated Questions", open=False):
-                    gr.Markdown("*Run 'Analyze CV & JD' to generate personalised questions.*")
+                with gr.Accordion("Generated Prompts", open=False):
+                    gr.Markdown("*Run 'Analyze CV & JD' to generate personalised prompts.*")
                     gen_q_tbs = []
                     for i in range(5):
                         with gr.Row():
                             tb = gr.Textbox(
                                 value="",
-                                label=f"Question {i + 1}",
+                                label=f"Prompt {i + 1}",
                                 interactive=False,
                                 lines=2,
                                 placeholder="Will appear after analysis...",
@@ -412,6 +539,19 @@ def create_app():
             fn=handle_confirm,
             inputs=[cv_text, jd_text, difficulty],
             outputs=[confirm_status, pipeline_state] + gen_q_tbs + [gap_summary_md],
+        ).then(
+            fn=lambda: gr.Button(interactive=True),
+            outputs=[evaluate_btn],
+        )
+
+        # Wire evaluate button → judge → eval output
+        evaluate_btn.click(
+            fn=lambda: gr.Button(value="Evaluating...", interactive=False),
+            outputs=[evaluate_btn],
+        ).then(
+            fn=handle_evaluate,
+            inputs=[chatbot, pipeline_state],
+            outputs=[eval_output, evaluate_btn],
         )
 
     return app
