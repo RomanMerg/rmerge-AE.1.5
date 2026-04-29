@@ -96,7 +96,7 @@ Asks the model to reason step-by-step: list all JD requirements, check each agai
 The model adopts a configurable interviewer character (strict / neutral / friendly) and stays in character throughout the multi-turn session.
 
 ### 5. Structured Output — JD Parsing
-Instructs the model to return ONLY valid JSON matching a defined schema, used with `instructor` + Pydantic for reliable extraction.
+Instructs the model to return ONLY valid JSON matching a defined schema. Responses are parsed with `json.loads()` and validated against Pydantic v2 models.
 
 ### 6. Self-Consistency / Evaluation — LLM-as-Judge
 A separate model call evaluates each Q&A pair in the session transcript independently, then produces an overall readiness score with specific improvement suggestions.
@@ -130,7 +130,7 @@ PostgreSQL with the `pgvector` extension. All tables use UUIDs and are session-s
 - `chat_messages` — full conversation history with model used and estimated cost
 - `evaluations` — per-session LLM-as-Judge output
 
-Vector embeddings use `nomic-embed-text-v2-moe` at 256 Matryoshka dimensions with an IVFFlat cosine similarity index. Before generating questions, the app queries pgvector for similar CV+JD combinations — if similarity exceeds 0.95, the model is instructed to produce novel questions not seen in prior sessions.
+Vector embeddings use `nomic-embed-text-v2-moe` at 256 Matryoshka dimensions with an IVFFlat cosine similarity index. `find_similar_cv()` and `find_similar_jd()` provide cosine similarity search for future deduplication use.
 
 ---
 
