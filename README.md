@@ -35,17 +35,18 @@ A CV-aware interview practice chatbot built for Turing College Sprint 1 (LLM Fun
 
 ## Model Routing
 
-Different models are used for different stages of the pipeline, optimised for cost and capability:
+Background pipeline stages use fixed models hardcoded in `config.py`. The **chat stage is user-controlled** — the Settings panel lets you switch provider (OpenRouter ↔ Ollama) and select any model from the dropdown.
 
-| Stage | Model | Provider |
-|-------|-------|----------|
-| Security guard (intent check) | `openai/gpt-5-nano` | OpenRouter |
-| CV / JD parsing | `openai/gpt-5-mini` | OpenRouter |
-| Gap analysis | `openai/gpt-5-mini` | OpenRouter |
-| Interview chat (default) | `openai/gpt-5-mini` | OpenRouter |
-| Interview chat (local) | `qwen3.5:9b` | Ollama |
-| Embeddings | `nomic-embed-text-v2-moe` | Ollama |
-| LLM-as-Judge evaluation | `openai/gpt-5` | OpenRouter |
+| Stage | Default model | Provider | User-configurable? |
+|-------|--------------|----------|--------------------|
+| Security guard (intent check) | `openai/gpt-5-nano` | OpenRouter | No — fast/cheap guard |
+| CV / JD parsing | `openai/gpt-5-mini` | OpenRouter | No — structured output |
+| Gap analysis | `openai/gpt-5-mini` | OpenRouter | No — structured output |
+| Question generation | `openai/gpt-5-mini` | OpenRouter | No — structured output |
+| Embeddings | `nomic-embed-text-v2-moe` | Ollama | No — local only |
+| LLM-as-Judge evaluation | `openai/gpt-5` | OpenRouter | No — runs once/session |
+| **Interview chat** | `openai/gpt-5-mini` | OpenRouter | **Yes — model dropdown** |
+| **Interview chat (local)** | `qwen3.5:9b` | Ollama | **Yes — provider toggle** |
 
 ---
 

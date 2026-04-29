@@ -8,3 +8,4 @@ venv/
 *.bkp
 .claude/
 .superpowers/
+CLAUDE*.md
