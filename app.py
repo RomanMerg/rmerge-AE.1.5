@@ -19,7 +19,7 @@ from config import (
 from llm.router import chat, chat_stream, smoke_test
 from llm.guards import validate_cv, validate_jd, check_prompt_injection, classify_input
 from llm.judge import evaluate_session
-from db.queries import store_evaluation
+from db.queries import store_evaluation, store_chat_message
 from llm.user_prompts import INPUT_TEMPLATES
 from db.connection import init_db, test_connection
 from utils.cost_tracker import SessionCostTracker
@@ -164,6 +164,13 @@ def respond(message, history, cv_text, jd_text, model, provider,
         actual_model = model
     logger.info("Chat: provider=%s model=%s", provider, actual_model)
 
+    # Persist user message before streaming
+    if pipeline_result is not None:
+        try:
+            store_chat_message(pipeline_result.session_id, "user", message)
+        except Exception as e:
+            logger.warning("Could not persist user message: %s", e)
+
     full_response = ""
     is_ollama = (provider == PROVIDER_OLLAMA)
     in_think_block = False          # suppress display while think block is open
@@ -206,7 +213,14 @@ def respond(message, history, cv_text, jd_text, model, provider,
     logger.info("Response: %d chars", len(full_response))
     est_in = sum(len(m["content"]) for m in messages) // 4
     est_out = len(full_response) // 4
-    cost_tracker.add(actual_model, est_in, est_out)
+    last_cost = cost_tracker.add(actual_model, est_in, est_out)
+
+    # Persist assistant message after streaming completes
+    if pipeline_result is not None:
+        try:
+            store_chat_message(pipeline_result.session_id, "assistant", full_response, actual_model, last_cost)
+        except Exception as e:
+            logger.warning("Could not persist assistant message: %s", e)
 
 
 def handle_cv_upload(file):

@@ -78,6 +78,26 @@ def store_gap_analysis(
     return gap_id
 
 
+def store_chat_message(
+    session_id: str,
+    role: str,
+    content: str,
+    model_used: str = "",
+    cost_usd: float = 0.0,
+) -> str:
+    """Store a single message in chat_messages table. Returns message_id."""
+    rows = execute_query(
+        """INSERT INTO chat_messages (session_id, role, content, model_used, cost_usd)
+           VALUES (%s, %s, %s, %s, %s)
+           RETURNING id""",
+        (session_id, role, content, model_used, cost_usd),
+        fetch=True,
+    )
+    msg_id = str(rows[0]["id"])
+    logger.debug("[db] chat_message stored: %s role=%s", msg_id, role)
+    return msg_id
+
+
 def store_evaluation(session_id: str, evaluation: SessionEvaluation) -> str:
     rows = execute_query(
         """INSERT INTO evaluations (session_id, evaluation, overall_score)
