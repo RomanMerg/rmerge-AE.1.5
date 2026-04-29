@@ -109,3 +109,47 @@ def store_evaluation(session_id: str, evaluation: SessionEvaluation) -> str:
     eval_id = str(rows[0]["id"])
     logger.debug("[db] evaluation stored: %s score=%d", eval_id, evaluation.overall_score)
     return eval_id
+
+
+def find_similar_cv(embedding: list[float], threshold: float = 0.85, limit: int = 5) -> list[dict]:
+    """Find CV profiles with cosine similarity above threshold.
+
+    Returns list of dicts with keys: session_id, cv_id, similarity_score.
+    """
+    vec = _vec_literal(embedding)
+    rows = execute_query(
+        """SELECT id, session_id, 1 - (embedding <=> %s::vector) AS similarity_score
+           FROM cv_profiles
+           WHERE embedding IS NOT NULL
+             AND 1 - (embedding <=> %s::vector) > %s
+           ORDER BY similarity_score DESC
+           LIMIT %s""",
+        (vec, vec, threshold, limit),
+        fetch=True,
+    )
+    return [
+        {"cv_id": str(r["id"]), "session_id": str(r["session_id"]), "similarity_score": r["similarity_score"]}
+        for r in rows
+    ]
+
+
+def find_similar_jd(embedding: list[float], threshold: float = 0.85, limit: int = 5) -> list[dict]:
+    """Find job descriptions with cosine similarity above threshold.
+
+    Returns list of dicts with keys: session_id, jd_id, similarity_score.
+    """
+    vec = _vec_literal(embedding)
+    rows = execute_query(
+        """SELECT id, session_id, 1 - (embedding <=> %s::vector) AS similarity_score
+           FROM job_descriptions
+           WHERE embedding IS NOT NULL
+             AND 1 - (embedding <=> %s::vector) > %s
+           ORDER BY similarity_score DESC
+           LIMIT %s""",
+        (vec, vec, threshold, limit),
+        fetch=True,
+    )
+    return [
+        {"jd_id": str(r["id"]), "session_id": str(r["session_id"]), "similarity_score": r["similarity_score"]}
+        for r in rows
+    ]
