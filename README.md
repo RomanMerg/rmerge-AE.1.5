@@ -12,6 +12,7 @@ A CV-aware interview practice chatbot built for Turing College Sprint 1 (LLM Fun
 2. **Gap Analysis** — A chain-of-thought prompt identifies matching skills, partial matches, and critical gaps, producing a readiness score from 0–100.
 3. **Interview Practice** — A multi-turn chat session with a configurable interviewer persona (neutral / strict / friendly) and difficulty level (easy / medium / hard). Questions are generated from the gap analysis using few-shot prompting.
 4. **Session Evaluation** — An LLM-as-Judge evaluation (using the highest-capability model) scores each answer and provides an overall readiness summary with specific improvement recommendations.
+5. **Persistence & Cost Tracking** — Every message and evaluation is stored to PostgreSQL with model used and estimated cost. Per-prompt cost is displayed in the UI after each assistant response.
 
 ---
 
@@ -185,24 +186,30 @@ Open http://localhost:7860 once the container is running.
 
 ```
 rmerge-AE.1.5/
-├── app.py              # Gradio UI — chat interface, settings panel, input templates
+├── app.py              # Gradio UI — chat interface, three modes, settings panel, input templates
 ├── config.py           # Environment variables, model routing, per-model capability config
 ├── init.sql            # PostgreSQL schema (auto-run on first start)
 ├── llm/
 │   ├── router.py       # OpenRouter + Ollama client (same openai SDK, different base_url)
 │   ├── prompts.py      # All 6 system prompts
-│   ├── guards.py       # Input validation and intent classification
+│   ├── guards.py       # Input validation and LLM-based intent classification
 │   ├── judge.py        # LLM-as-Judge session evaluation
 │   └── user_prompts.py # Chat input template prompts shown in the UI
 ├── parsers/
-│   ├── cv_parser.py    # PDF → markdown → structured JSON
-│   └── jd_parser.py    # Job description extraction
+│   └── pipeline.py     # run_pipeline() — CV/JD parsing, embeddings, gap analysis, questions
 ├── db/
 │   ├── connection.py   # PostgreSQL connection, pgvector setup
-│   ├── models.py       # Pydantic models
-│   └── queries.py      # CRUD and vector similarity queries
+│   ├── models.py       # Pydantic models (CVProfile, JobDescription, GapAnalysis, etc.)
+│   └── queries.py      # CRUD + pgvector cosine similarity queries
 ├── utils/
-│   └── cost_tracker.py # OpenRouter API cost estimation
+│   └── cost_tracker.py # Per-prompt and session cost estimation
+├── docs/
+│   └── submission/
+│       └── 115.md      # Formal submission document
 └── tests/
-    └── test_settings_handlers.py  # Unit tests for UI handler logic
+    ├── test_pipeline.py         # 17 tests — CV/JD parsing, gap analysis, embeddings
+    ├── test_queries.py          # 9 tests — DB CRUD + pgvector similarity queries
+    ├── test_settings_handlers.py # 13 tests — model/provider UI handler logic
+    ├── test_judge.py            # 7 tests — LLM-as-Judge evaluation
+    └── test_guards.py           # 11 tests — guard classification
 ```
