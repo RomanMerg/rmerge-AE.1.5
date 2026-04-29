@@ -22,10 +22,11 @@ from llm.judge import evaluate_session
 from db.queries import store_evaluation, store_chat_message
 from llm.user_prompts import INPUT_TEMPLATES
 from db.connection import init_db, test_connection
-from utils.cost_tracker import SessionCostTracker
+from utils.cost_tracker import SessionCostTracker, format_cost
 from parsers.pipeline import run_pipeline, PipelineResult
 
 cost_tracker = SessionCostTracker()
+_last_cost: float = 0.0
 logger = logging.getLogger("app")
 
 THINK_RE = re.compile(r"<think>[\s\S]*?</think>\s*", re.DOTALL)
@@ -38,6 +39,11 @@ def strip_think_tags(text):
     if idx != -1:
         cleaned = cleaned[:idx]
     return cleaned.strip()
+
+
+def get_last_cost() -> str:
+    """Return formatted cost for the most recent assistant response."""
+    return f"💰 Cost for this response: {format_cost(_last_cost)}" if _last_cost > 0 else ""
 
 
 def _build_system_parts(cv_text, jd_text, persona, difficulty, pipeline_result, chat_mode="practice"):
@@ -213,7 +219,9 @@ def respond(message, history, cv_text, jd_text, model, provider,
     logger.info("Response: %d chars", len(full_response))
     est_in = sum(len(m["content"]) for m in messages) // 4
     est_out = len(full_response) // 4
+    global _last_cost
     last_cost = cost_tracker.add(actual_model, est_in, est_out)
+    _last_cost = last_cost
 
     # Persist assistant message after streaming completes
     if pipeline_result is not None:
@@ -508,6 +516,9 @@ def create_app():
                     ],
                     fill_height=True,
                 )
+
+                cost_display = gr.Markdown("")
+                chatbot.change(get_last_cost, outputs=[cost_display])
 
                 evaluate_btn = gr.Button(
                     "Evaluate Session",
