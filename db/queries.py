@@ -82,8 +82,8 @@ def store_chat_message(
     session_id: str,
     role: str,
     content: str,
-    model_used: str = "",
-    cost_usd: float = 0.0,
+    model_used: str | None = None,
+    cost_usd: float | None = None,
 ) -> str:
     """Store a single message in chat_messages table. Returns message_id."""
     rows = execute_query(
