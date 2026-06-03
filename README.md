@@ -50,7 +50,7 @@ Background pipeline stages use fixed models hardcoded in `config.py`. The **chat
 
 ---
 
-## Assignment Coverage
+## Assignment Coverage --part of learning project submission/ignore
 
 ### Mandatory Requirements
 
