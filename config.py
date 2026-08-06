@@ -9,7 +9,7 @@ load_dotenv()
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/interview_app")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:Twenty2024SecurePass123@localhost:5432/interview")
 
 # --- Model Routing ---
 # Each stage uses the optimal model for its task
